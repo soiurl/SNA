@@ -1,0 +1,70 @@
+#read data from csv documents 
+edge=read.csv(file ="test-edgelist2010weight.csv",
+                  sep = ",",
+                  stringsAsFactors = F, # Always include this argument!
+                  header = T)
+node=read.csv(file ="test_node_level_data.csv",
+                  sep = ",",
+                  stringsAsFactors = F, # Always include this argument!
+                  header = T)
+                  
+
+# data cleaning: matching nodes info
+Process_Node_and_Relational_Data <- function(node_level_data,
+                                             relational_data,
+                                             node_id_column = 1
+){
+  #get our node ids
+  node_ids <- node_level_data[,node_id_column]
+  #remove any missing or blank entries
+  to_remove <- which(node_ids == "" | is.na(node_ids))
+  if(length(to_remove) > 0){
+    node_ids <- node_ids[-to_remove]
+    node_level_data <- node_level_data[-to_remove,]
+  }
+  # Allocate a blank edgelist to return
+  edgelist <- NULL
+  # Loop over rows to check them
+  for(i in 1:length(relational_data[,1])){
+    # Check to see if the sender is in the dataset
+    if(length(which(node_ids == relational_data[i,1]) > 0)){
+      #' If we have a valid sender, check to see if there is a valid reciever 
+      #' and add them to the dataset if they are valid as well for each 
+      #' receiver
+      for(j in 2:ncol(relational_data)){
+        if(!is.na(relational_data[i,j])){
+          if(length(which(node_ids == relational_data[i,j]) > 0)){
+            edge <- c(relational_data[i,1],relational_data[i,j])
+            edgelist <- rbind(edgelist,edge)
+          }
+        }
+      }
+    }
+  }
+  
+  # Give column names to edgelist
+  colnames(edgelist) <- c("sender","receiver")
+  # Return cleaned data as a list object
+  return(list(node_level_data = node_level_data, 
+              edgelist = edgelist,
+              num_nodes = length(node_level_data[,1]),
+              node_names = node_ids))
+}
+
+#creating clean data
+Clean_Data <- Process_Node_and_Relational_Data(node_level_data = node, 
+                                               relational_data = edge,
+                                               node_id_column = 1)
+#initialize the network
+net1 <- network.initialize(Clean_Data$num_nodes)
+network.vertex.names(net1) <- Clean_Data$node_names
+net1[as.matrix(Clean_Data$edgelist)] <- 1
+
+#set edges value
+set.edge.value(net1,"weight",edge$weight)
+
+#set vertex attribute
+set.vertex.attribute(net1,"nation",Clean_Data$node_level_data$nation)
+set.vertex.attribute(net1,"ranking",as.character(Clean_Data$node_level_data$ranking))
+set.vertex.attribute(net1,"city",as.character(Clean_Data$node_level_data$city))
+set.vertex.attribute(net1,"region",as.character(Clean_Data$node_level_data$region))
